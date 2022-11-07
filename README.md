@@ -3,11 +3,12 @@ Code for [*Actor-Attention-Critic for Multi-Agent Reinforcement Learning*](https
 
 ## Requirements
 * Python 3.6.1 (Minimum)
-* [OpenAI baselines](https://github.com/openai/baselines), commit hash: 98257ef8c9bd23a24a330731ae54ed086d9ce4a7
+* [OpenAI baselines](https://github.com/openai/baselines/tree/98257ef8c9bd23a24a330731ae54ed086d9ce4a7), commit hash: 98257ef8c9bd23a24a330731ae54ed086d9ce4a7
 * My [fork](https://github.com/shariqiqbal2810/multiagent-particle-envs) of Multi-agent Particle Environments
-* [PyTorch](http://pytorch.org/), version: 0.3.0.post4
-* [OpenAI Gym](https://github.com/openai/gym), version: 0.9.4
-* [Tensorboard](https://github.com/tensorflow/tensorboard), version: 0.4.0rc3 and [Tensorboard-Pytorch](https://github.com/lanpa/tensorboard-pytorch), version: 1.0 (for logging)
+* [PyTorch](http://pytorch.org/), version: 0.3.0.post4 ([Download Link](https://download.pytorch.org/whl/cu75/torch-0.3.0.post4-cp36-cp36m-linux_x86_64.whl))
+* [OpenAI Gym](https://pypi.org/project/gym/0.9.4/), version: 0.9.4
+* [Tensorboard](https://pypi.org/project/tensorflow-tensorboard/0.4.0rc3/), version: 0.4.0rc3 and [Tensorboard-Pytorch](https://pypi.org/project/tensorboardX/1.0/), version: 1.0 (for logging)
+* [Seaborn](https://pypi.org/project/seaborn/0.9.0/) version: 0.9.0
 
 The versions are just what I used and not necessarily strict requirements.
 

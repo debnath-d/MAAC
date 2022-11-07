@@ -25,6 +25,7 @@ def make_parallel_env(env_id, n_rollout_threads, seed):
     else:
         return SubprocVecEnv([get_env_fn(i) for i in range(n_rollout_threads)])
 
+
 def run(config):
     model_dir = Path('./models') / config.env_id / config.model_name
     if not model_dir.exists():
@@ -56,7 +57,8 @@ def run(config):
                                        attend_heads=config.attend_heads,
                                        reward_scale=config.reward_scale)
     replay_buffer = ReplayBuffer(config.buffer_length, model.nagents,
-                                 [obsp.shape[0] for obsp in env.observation_space],
+                                 [obsp.shape[0]
+                                     for obsp in env.observation_space],
                                  [acsp.shape[0] if isinstance(acsp, Box) else acsp.n
                                   for acsp in env.action_space])
     t = 0
@@ -77,13 +79,14 @@ def run(config):
             # convert actions to numpy arrays
             agent_actions = [ac.data.numpy() for ac in torch_agent_actions]
             # rearrange actions to be per environment
-            actions = [[ac[i] for ac in agent_actions] for i in range(config.n_rollout_threads)]
+            actions = [[ac[i] for ac in agent_actions]
+                       for i in range(config.n_rollout_threads)]
             next_obs, rewards, dones, infos = env.step(actions)
             replay_buffer.push(obs, agent_actions, rewards, next_obs, dones)
             obs = next_obs
             t += config.n_rollout_threads
             if (len(replay_buffer) >= config.batch_size and
-                (t % config.steps_per_update) < config.n_rollout_threads):
+                    (t % config.steps_per_update) < config.n_rollout_threads):
                 if config.use_gpu:
                     model.prep_training(device='gpu')
                 else:
@@ -104,7 +107,8 @@ def run(config):
         if ep_i % config.save_interval < config.n_rollout_threads:
             model.prep_rollouts(device='cpu')
             os.makedirs(run_dir / 'incremental', exist_ok=True)
-            model.save(run_dir / 'incremental' / ('model_ep%i.pt' % (ep_i + 1)))
+            model.save(run_dir / 'incremental' /
+                       ('model_ep%i.pt' % (ep_i + 1)))
             model.save(run_dir / 'model.pt')
 
     model.save(run_dir / 'model.pt')

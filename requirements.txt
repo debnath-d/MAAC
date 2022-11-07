@@ -1,0 +1,7 @@
+baselines @ git+https://github.com/openai/baselines.git@98257ef8c9bd23a24a330731ae54ed086d9ce4a7
+gym==0.9.4
+multiagent @ git+https://github.com/shariqiqbal2810/multiagent-particle-envs.git@a3ccb43851dc6b04bab5a6e3f7443a35a4dd445f
+tensorflow-tensorboard==0.4.0rc3
+tensorboardX==1.0
+seaborn==0.9.0
+torch @ file:///tmp/pip-tmp/torch-0.3.0.post4-cp36-cp36m-linux_x86_64.whl
