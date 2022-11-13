@@ -7,11 +7,13 @@ from utils.critics import AttentionCritic
 
 MSELoss = torch.nn.MSELoss()
 
+
 class AttentionSAC(object):
     """
     Wrapper class for SAC agents with central attention critic in multi-agent
     task
     """
+
     def __init__(self, agent_init_params, sa_size,
                  gamma=0.95, tau=0.01, pi_lr=0.01, q_lr=0.01,
                  reward_scale=10.,
@@ -39,7 +41,7 @@ class AttentionSAC(object):
         self.agents = [AttentionAgent(lr=pi_lr,
                                       hidden_dim=pol_hidden_dim,
                                       **params)
-                         for params in agent_init_params]
+                       for params in agent_init_params]
         self.critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,
                                       attend_heads=attend_heads)
         self.target_critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,
@@ -53,10 +55,6 @@ class AttentionSAC(object):
         self.pi_lr = pi_lr
         self.q_lr = q_lr
         self.reward_scale = reward_scale
-        self.pol_dev = 'cpu'  # device for policies
-        self.critic_dev = 'cpu'  # device for critics
-        self.trgt_pol_dev = 'cpu'  # device for target policies
-        self.trgt_critic_dev = 'cpu'  # device for target critics
         self.niter = 0
 
     @property
@@ -129,8 +127,7 @@ class AttentionSAC(object):
             curr_ac, probs, log_pi, pol_regs, ent = pi(
                 ob, return_all_probs=True, return_log_pi=True,
                 regularize=True, return_entropy=True)
-            logger.add_scalar('agent%i/policy_entropy' % a_i, ent,
-                              self.niter)
+            logger.add_scalar(f"agent{a_i}/policy_entropy", ent, self.niter)
             samp_acs.append(curr_ac)
             all_probs.append(probs)
             all_log_pis.append(log_pi)
@@ -145,7 +142,8 @@ class AttentionSAC(object):
             v = (all_q * probs).sum(dim=1, keepdim=True)
             pol_target = q - v
             if soft:
-                pol_loss = (log_pi * (log_pi / self.reward_scale - pol_target).detach()).mean()
+                pol_loss = (log_pi * (log_pi / self.reward_scale -
+                            pol_target).detach()).mean()
             else:
                 pol_loss = (log_pi * (-pol_target).detach()).mean()
             for reg in pol_regs:
@@ -161,11 +159,10 @@ class AttentionSAC(object):
             curr_agent.policy_optimizer.zero_grad()
 
             if logger is not None:
-                logger.add_scalar('agent%i/losses/pol_loss' % a_i,
-                                  pol_loss, self.niter)
-                logger.add_scalar('agent%i/grad_norms/pi' % a_i,
-                                  grad_norm, self.niter)
-
+                logger.add_scalar(
+                    f"agent{a_i}/losses/pol_loss", pol_loss, self.niter)
+                logger.add_scalar(
+                    f"agent{a_i}/grad_norms/pi", grad_norm, self.niter)
 
     def update_all_targets(self):
         """
@@ -176,49 +173,22 @@ class AttentionSAC(object):
         for a in self.agents:
             soft_update(a.target_policy, a.policy, self.tau)
 
-    def prep_training(self, device='gpu'):
+    def prep_training(self):
         self.critic.train()
         self.target_critic.train()
         for a in self.agents:
             a.policy.train()
             a.target_policy.train()
-        if device == 'gpu':
-            fn = lambda x: x.cuda()
-        else:
-            fn = lambda x: x.cpu()
-        if not self.pol_dev == device:
-            for a in self.agents:
-                a.policy = fn(a.policy)
-            self.pol_dev = device
-        if not self.critic_dev == device:
-            self.critic = fn(self.critic)
-            self.critic_dev = device
-        if not self.trgt_pol_dev == device:
-            for a in self.agents:
-                a.target_policy = fn(a.target_policy)
-            self.trgt_pol_dev = device
-        if not self.trgt_critic_dev == device:
-            self.target_critic = fn(self.target_critic)
-            self.trgt_critic_dev = device
 
-    def prep_rollouts(self, device='cpu'):
+    def prep_rollouts(self):
         for a in self.agents:
             a.policy.eval()
-        if device == 'gpu':
-            fn = lambda x: x.cuda()
-        else:
-            fn = lambda x: x.cpu()
-        # only need main policy for rollouts
-        if not self.pol_dev == device:
-            for a in self.agents:
-                a.policy = fn(a.policy)
-            self.pol_dev = device
 
     def save(self, filename):
         """
         Save trained parameters of all agents into one file
         """
-        self.prep_training(device='cpu')  # move parameters to CPU before saving
+        self.prep_training()  # move parameters to CPU before saving
         save_dict = {'init_dict': self.init_dict,
                      'agent_params': [a.get_params() for a in self.agents],
                      'critic_params': {'critic': self.critic.state_dict(),
@@ -275,6 +245,8 @@ class AttentionSAC(object):
         if load_critic:
             critic_params = save_dict['critic_params']
             instance.critic.load_state_dict(critic_params['critic'])
-            instance.target_critic.load_state_dict(critic_params['target_critic'])
-            instance.critic_optimizer.load_state_dict(critic_params['critic_optimizer'])
+            instance.target_critic.load_state_dict(
+                critic_params['target_critic'])
+            instance.critic_optimizer.load_state_dict(
+                critic_params['critic_optimizer'])
         return instance

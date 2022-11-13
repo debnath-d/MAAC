@@ -3,10 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from utils.misc import onehot_from_logits, categorical_sample
 
+
 class BasePolicy(nn.Module):
     """
     Base policy network
     """
+
     def __init__(self, input_dim, out_dim, hidden_dim=64, nonlin=F.leaky_relu,
                  norm_in=True, onehot_dim=0):
         """
@@ -24,6 +26,8 @@ class BasePolicy(nn.Module):
             self.in_fn = lambda x: x
         self.fc1 = nn.Linear(input_dim + onehot_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        # self.fc3 = nn.Linear(hidden_dim, hidden_dim)
+        # self.fc4 = nn.Linear(hidden_dim, hidden_dim)
         self.fc3 = nn.Linear(hidden_dim, out_dim)
         self.nonlin = nonlin
 
@@ -43,6 +47,8 @@ class BasePolicy(nn.Module):
             inp = torch.cat((onehot, inp), dim=1)
         h1 = self.nonlin(self.fc1(inp))
         h2 = self.nonlin(self.fc2(h1))
+        # h3 = self.nonlin(self.fc2(h2))
+        # h4 = self.nonlin(self.fc2(h3))
         out = self.fc3(h2)
         return out
 
@@ -51,6 +57,7 @@ class DiscretePolicy(BasePolicy):
     """
     Policy Network for discrete action spaces
     """
+
     def __init__(self, *args, **kwargs):
         super(DiscretePolicy, self).__init__(*args, **kwargs)
 
@@ -59,9 +66,8 @@ class DiscretePolicy(BasePolicy):
                 return_entropy=False):
         out = super(DiscretePolicy, self).forward(obs)
         probs = F.softmax(out, dim=1)
-        on_gpu = next(self.parameters()).is_cuda
         if sample:
-            int_act, act = categorical_sample(probs, use_cuda=on_gpu)
+            int_act, act = categorical_sample(probs)
         else:
             act = onehot_from_logits(probs)
         rets = [act]

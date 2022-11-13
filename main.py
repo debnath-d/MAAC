@@ -2,13 +2,13 @@ import argparse
 import torch
 import os
 import numpy as np
-from gym.spaces import Box, Discrete
+from gym.spaces import Box
 from pathlib import Path
 from torch.autograd import Variable
 from tensorboardX import SummaryWriter
 from utils.make_env import make_env
 from utils.buffer import ReplayBuffer
-from utils.env_wrappers import SubprocVecEnv, DummyVecEnv
+from utils.env_wrappers import SubprocVecEnv
 from algorithms.attention_sac import AttentionSAC
 
 
@@ -20,10 +20,7 @@ def make_parallel_env(env_id, n_rollout_threads, seed):
             np.random.seed(seed + rank * 1000)
             return env
         return init_env
-    if n_rollout_threads == 1:
-        return DummyVecEnv([get_env_fn(0)])
-    else:
-        return SubprocVecEnv([get_env_fn(i) for i in range(n_rollout_threads)])
+    return SubprocVecEnv([get_env_fn(i) for i in range(n_rollout_threads)])
 
 
 def run(config):
@@ -38,7 +35,7 @@ def run(config):
             run_num = 1
         else:
             run_num = max(exst_run_nums) + 1
-    curr_run = 'run%i' % run_num
+    curr_run = f"run{run_num}"
     run_dir = model_dir / curr_run
     log_dir = run_dir / 'logs'
     os.makedirs(log_dir)
@@ -46,7 +43,10 @@ def run(config):
 
     torch.manual_seed(run_num)
     np.random.seed(run_num)
-    env = make_parallel_env(config.env_id, config.n_rollout_threads, run_num)
+    env = make_parallel_env(
+        config.env_id, max(config.n_rollout_threads, 2),
+        run_num
+    )
     model = AttentionSAC.init_from_env(env,
                                        tau=config.tau,
                                        pi_lr=config.pi_lr,
@@ -56,20 +56,21 @@ def run(config):
                                        critic_hidden_dim=config.critic_hidden_dim,
                                        attend_heads=config.attend_heads,
                                        reward_scale=config.reward_scale)
-    replay_buffer = ReplayBuffer(config.buffer_length, model.nagents,
-                                 [obsp.shape[0]
-                                     for obsp in env.observation_space],
-                                 [acsp.shape[0] if isinstance(acsp, Box) else acsp.n
-                                  for acsp in env.action_space])
+    replay_buffer = ReplayBuffer(
+        config.buffer_length,
+        model.nagents,
+        [obsp.shape[0] for obsp in env.observation_space],
+        [acsp.shape[0] if isinstance(
+            acsp, Box) else acsp.n for acsp in env.action_space]
+    )
     t = 0
     for ep_i in range(0, config.n_episodes, config.n_rollout_threads):
-        print("Episodes %i-%i of %i" % (ep_i + 1,
-                                        ep_i + 1 + config.n_rollout_threads,
-                                        config.n_episodes))
+        print(
+            f"Episodes {ep_i + 1}-{ep_i + 1 + config.n_rollout_threads} of {config.n_episodes}")
         obs = env.reset()
-        model.prep_rollouts(device='cpu')
+        model.prep_rollouts()
 
-        for et_i in range(config.episode_length):
+        for _ in range(config.episode_length):
             # rearrange observations to be per agent, and convert to torch Variable
             torch_obs = [Variable(torch.Tensor(np.vstack(obs[:, i])),
                                   requires_grad=False)
@@ -87,28 +88,23 @@ def run(config):
             t += config.n_rollout_threads
             if (len(replay_buffer) >= config.batch_size and
                     (t % config.steps_per_update) < config.n_rollout_threads):
-                if config.use_gpu:
-                    model.prep_training(device='gpu')
-                else:
-                    model.prep_training(device='cpu')
+                model.prep_training()
                 for u_i in range(config.num_updates):
-                    sample = replay_buffer.sample(config.batch_size,
-                                                  to_gpu=config.use_gpu)
+                    sample = replay_buffer.sample(config.batch_size)
                     model.update_critic(sample, logger=logger)
                     model.update_policies(sample, logger=logger)
                     model.update_all_targets()
-                model.prep_rollouts(device='cpu')
+                model.prep_rollouts()
         ep_rews = replay_buffer.get_average_rewards(
             config.episode_length * config.n_rollout_threads)
         for a_i, a_ep_rew in enumerate(ep_rews):
-            logger.add_scalar('agent%i/mean_episode_rewards' % a_i,
-                              a_ep_rew * config.episode_length, ep_i)
+            logger.add_scalar(
+                f"agent{a_i}/mean_episode_rewards", a_ep_rew * config.episode_length, ep_i)
 
         if ep_i % config.save_interval < config.n_rollout_threads:
-            model.prep_rollouts(device='cpu')
+            model.prep_rollouts()
             os.makedirs(run_dir / 'incremental', exist_ok=True)
-            model.save(run_dir / 'incremental' /
-                       ('model_ep%i.pt' % (ep_i + 1)))
+            model.save(run_dir / 'incremental' / f"model_ep{ep_i + 1}.pt")
             model.save(run_dir / 'model.pt')
 
     model.save(run_dir / 'model.pt')
@@ -142,7 +138,6 @@ if __name__ == '__main__':
     parser.add_argument("--tau", default=0.001, type=float)
     parser.add_argument("--gamma", default=0.99, type=float)
     parser.add_argument("--reward_scale", default=100., type=float)
-    parser.add_argument("--use_gpu", action='store_true')
 
     config = parser.parse_args()
 

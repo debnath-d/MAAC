@@ -1,7 +1,8 @@
 import numpy as np
 import seaborn as sns
-from multiagent.core import World, Agent, Landmark, Wall
+from multiagent.core import World, Agent, Landmark
 from multiagent.scenario import BaseScenario
+
 
 class Scenario(BaseScenario):
     def make_world(self):
@@ -20,7 +21,7 @@ class Scenario(BaseScenario):
         world.agents = [Agent() for i in range(num_agents)]
         for i, agent in enumerate(world.agents):
             agent.i = i
-            agent.name = 'agent %d' % i
+            agent.name = f"agent {i}"
             agent.collector = True if i < num_collectors else False
             if agent.collector:
                 agent.color = np.array([0.85, 0.85, 0.85])
@@ -39,7 +40,7 @@ class Scenario(BaseScenario):
         world.landmarks = [Landmark() for i in range(num_treasures)]
         for i, landmark in enumerate(world.landmarks):
             landmark.i = i + num_agents
-            landmark.name = 'treasure %d' % i
+            landmark.name = f"treasure {i}"
             landmark.respawn_prob = 1.0
             landmark.type = np.random.choice(world.treasure_types)
             landmark.color = world.treasure_colors[landmark.type]
@@ -153,12 +154,14 @@ class Scenario(BaseScenario):
             else:
                 n_visible = 7
                 # get positions of all entities in this agent's reference frame
-                other_agent_inds = [a.i for a in world.agents if (a is not agent and a.collector)]
+                other_agent_inds = [a.i for a in world.agents if (
+                    a is not agent and a.collector)]
                 closest_agents = sorted(
                     zip(world.cached_dist_mag[other_agent_inds, agent.i],
                         other_agent_inds))[:n_visible]
                 closest_inds = list(i for _, i in closest_agents)
-                closest_avg_dist_vect = world.cached_dist_vect[closest_inds, agent.i].mean(axis=0)
+                closest_avg_dist_vect = world.cached_dist_vect[closest_inds, agent.i].mean(
+                    axis=0)
                 rew -= 0.1 * np.linalg.norm(closest_avg_dist_vect)
         rew += self.global_reward(world)
         return rew
