@@ -38,9 +38,7 @@ class AttentionSAC(object):
         """
         self.nagents = len(sa_size)
 
-        self.agents = [AttentionAgent(lr=pi_lr,
-                                      hidden_dim=pol_hidden_dim,
-                                      **params)
+        self.agents = [AttentionAgent(lr=pi_lr, hidden_dim=pol_hidden_dim, **params)
                        for params in agent_init_params]
         self.critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,
                                       attend_heads=attend_heads)
@@ -55,7 +53,7 @@ class AttentionSAC(object):
         self.pi_lr = pi_lr
         self.q_lr = q_lr
         self.reward_scale = reward_scale
-        self.niter = 0
+        self.n_iter = 0
 
     @property
     def policies(self):
@@ -88,11 +86,11 @@ class AttentionSAC(object):
             curr_next_ac, curr_next_log_pi = pi(ob, return_log_pi=True)
             next_acs.append(curr_next_ac)
             next_log_pis.append(curr_next_log_pi)
-        trgt_critic_in = list(zip(next_obs, next_acs))
-        critic_in = list(zip(obs, acs))
-        next_qs = self.target_critic(trgt_critic_in)
-        critic_rets = self.critic(critic_in, regularize=True,
-                                  logger=logger, niter=self.niter)
+        target_critic_input = list(zip(next_obs, next_acs))
+        critic_input = list(zip(obs, acs))
+        next_qs = self.target_critic(target_critic_input)
+        critic_rets = self.critic(critic_input, regularize=True,
+                                  logger=logger, niter=self.n_iter)
         q_loss = 0
         for a_i, nq, log_pi, (pq, regs) in zip(range(self.nagents), next_qs,
                                                next_log_pis, critic_rets):
@@ -112,31 +110,31 @@ class AttentionSAC(object):
         self.critic_optimizer.zero_grad()
 
         if logger is not None:
-            logger.add_scalar('losses/q_loss', q_loss, self.niter)
-            logger.add_scalar('grad_norms/q', grad_norm, self.niter)
-        self.niter += 1
+            logger.add_scalar('losses/q_loss', q_loss, self.n_iter)
+            logger.add_scalar('grad_norms/q', grad_norm, self.n_iter)
+        self.n_iter += 1
 
     def update_policies(self, sample, soft=True, logger=None, **kwargs):
         obs, acs, rews, next_obs, dones = sample
-        samp_acs = []
-        all_probs = []
+        sample_actions = []
+        all_probabilities = []
         all_log_pis = []
-        all_pol_regs = []
+        all_pol_regularizations = []
 
         for a_i, pi, ob in zip(range(self.nagents), self.policies, obs):
-            curr_ac, probs, log_pi, pol_regs, ent = pi(
+            current_action, probs, log_pi, pol_regs, ent = pi(
                 ob, return_all_probs=True, return_log_pi=True,
                 regularize=True, return_entropy=True)
-            logger.add_scalar(f"agent{a_i}/policy_entropy", ent, self.niter)
-            samp_acs.append(curr_ac)
-            all_probs.append(probs)
+            logger.add_scalar(f"agent{a_i}/policy_entropy", ent, self.n_iter)
+            sample_actions.append(current_action)
+            all_probabilities.append(probs)
             all_log_pis.append(log_pi)
-            all_pol_regs.append(pol_regs)
+            all_pol_regularizations.append(pol_regs)
 
-        critic_in = list(zip(obs, samp_acs))
-        critic_rets = self.critic(critic_in, return_all_q=True)
-        for a_i, probs, log_pi, pol_regs, (q, all_q) in zip(range(self.nagents), all_probs,
-                                                            all_log_pis, all_pol_regs,
+        critic_input = list(zip(obs, sample_actions))
+        critic_rets = self.critic(critic_input, return_all_q=True)
+        for a_i, probs, log_pi, pol_regs, (q, all_q) in zip(range(self.nagents), all_probabilities,
+                                                            all_log_pis, all_pol_regularizations,
                                                             critic_rets):
             curr_agent = self.agents[a_i]
             v = (all_q * probs).sum(dim=1, keepdim=True)
@@ -160,9 +158,9 @@ class AttentionSAC(object):
 
             if logger is not None:
                 logger.add_scalar(
-                    f"agent{a_i}/losses/pol_loss", pol_loss, self.niter)
+                    f"agent{a_i}/losses/pol_loss", pol_loss, self.n_iter)
                 logger.add_scalar(
-                    f"agent{a_i}/grad_norms/pi", grad_norm, self.niter)
+                    f"agent{a_i}/grad_norms/pi", grad_norm, self.n_iter)
 
     def update_all_targets(self):
         """

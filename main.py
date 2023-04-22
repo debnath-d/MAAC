@@ -24,22 +24,17 @@ def make_parallel_env(env_id, n_rollout_threads, seed):
 
 
 def run(config):
-    model_dir = Path('./models') / config.env_id / config.model_name
-    if not model_dir.exists():
-        run_num = 1
-    else:
-        exst_run_nums = [int(str(folder.name).split('run')[1]) for folder in
-                         model_dir.iterdir() if
-                         str(folder.name).startswith('run')]
-        if len(exst_run_nums) == 0:
-            run_num = 1
-        else:
-            run_num = max(exst_run_nums) + 1
-    curr_run = f"run{run_num}"
-    run_dir = model_dir / curr_run
-    log_dir = run_dir / 'logs'
-    os.makedirs(log_dir)
-    logger = SummaryWriter(str(log_dir))
+    MODEL_DIR = Path('./models') / config.env_id / config.model_name
+    run_num = 1
+    if MODEL_DIR.exists():
+        exst_run_nums = [int(str(folder.name).split('run')[1])
+                         for folder in MODEL_DIR.iterdir() if str(folder.name).startswith('run')]
+        run_num = 1 if len(exst_run_nums) == 0 else (max(exst_run_nums) + 1)
+    CURR_RUN = f"run{run_num}"
+    RUN_DIR = MODEL_DIR / CURR_RUN
+    LOG_DIR = RUN_DIR / 'logs'
+    os.makedirs(LOG_DIR)
+    logger = SummaryWriter(str(LOG_DIR))
 
     torch.manual_seed(run_num)
     np.random.seed(run_num)
@@ -47,15 +42,21 @@ def run(config):
         config.env_id, max(config.n_rollout_threads, 2),
         run_num
     )
-    model = AttentionSAC.init_from_env(env,
-                                       tau=config.tau,
-                                       pi_lr=config.pi_lr,
-                                       q_lr=config.q_lr,
-                                       gamma=config.gamma,
-                                       pol_hidden_dim=config.pol_hidden_dim,
-                                       critic_hidden_dim=config.critic_hidden_dim,
-                                       attend_heads=config.attend_heads,
-                                       reward_scale=config.reward_scale)
+    model = AttentionSAC.init_from_env(
+        env,
+        tau=config.tau,
+        pi_lr=config.pi_lr,
+        q_lr=config.q_lr,
+        gamma=config.gamma,
+        pol_hidden_dim=config.pol_hidden_dim,
+        critic_hidden_dim=config.critic_hidden_dim,
+        attend_heads=config.attend_heads,
+        reward_scale=config.reward_scale
+    )
+    # model = AttentionSAC.init_from_save(
+    #     filename="models/fullobs_collect_treasure/test/run3/incremental/model_ep27001.pt",
+    #     load_critic=True
+    # )
     replay_buffer = ReplayBuffer(
         config.buffer_length,
         model.nagents,
@@ -63,6 +64,7 @@ def run(config):
         [acsp.shape[0] if isinstance(
             acsp, Box) else acsp.n for acsp in env.action_space]
     )
+
     t = 0
     for ep_i in range(0, config.n_episodes, config.n_rollout_threads):
         print(
@@ -72,8 +74,7 @@ def run(config):
 
         for _ in range(config.episode_length):
             # rearrange observations to be per agent, and convert to torch Variable
-            torch_obs = [Variable(torch.Tensor(np.vstack(obs[:, i])),
-                                  requires_grad=False)
+            torch_obs = [Variable(torch.Tensor(np.vstack(obs[:, i])), requires_grad=False)
                          for i in range(model.nagents)]
             # get actions as torch Variables
             torch_agent_actions = model.step(torch_obs, explore=True)
@@ -86,15 +87,17 @@ def run(config):
             replay_buffer.push(obs, agent_actions, rewards, next_obs, dones)
             obs = next_obs
             t += config.n_rollout_threads
+
             if (len(replay_buffer) >= config.batch_size and
                     (t % config.steps_per_update) < config.n_rollout_threads):
                 model.prep_training()
-                for u_i in range(config.num_updates):
+                for _ in range(config.num_updates):
                     sample = replay_buffer.sample(config.batch_size)
                     model.update_critic(sample, logger=logger)
                     model.update_policies(sample, logger=logger)
                     model.update_all_targets()
                 model.prep_rollouts()
+
         ep_rews = replay_buffer.get_average_rewards(
             config.episode_length * config.n_rollout_threads)
         for a_i, a_ep_rew in enumerate(ep_rews):
@@ -103,13 +106,13 @@ def run(config):
 
         if ep_i % config.save_interval < config.n_rollout_threads:
             model.prep_rollouts()
-            os.makedirs(run_dir / 'incremental', exist_ok=True)
-            model.save(run_dir / 'incremental' / f"model_ep{ep_i + 1}.pt")
-            model.save(run_dir / 'model.pt')
+            os.makedirs(RUN_DIR / 'incremental', exist_ok=True)
+            model.save(RUN_DIR / 'incremental' / f"model_ep{ep_i + 1}.pt")
+            model.save(RUN_DIR / 'model.pt')
 
-    model.save(run_dir / 'model.pt')
+    model.save(RUN_DIR / 'model.pt')
     env.close()
-    logger.export_scalars_to_json(str(log_dir / 'summary.json'))
+    logger.export_scalars_to_json(str(LOG_DIR / 'summary.json'))
     logger.close()
 
 

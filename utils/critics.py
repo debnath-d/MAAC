@@ -33,44 +33,49 @@ class AttentionCritic(nn.Module):
 
         self.state_encoders = nn.ModuleList()
         # iterate over agents
-        for sdim, adim in sa_sizes:
-            idim = sdim + adim
-            odim = adim
+        for state_dim, action_dim in sa_sizes:
+            input_dim = state_dim + action_dim
+            output_dim = action_dim
             encoder = nn.Sequential()
             if norm_in:
-                encoder.add_module('enc_bn', nn.BatchNorm1d(idim,
+                encoder.add_module('enc_bn', nn.BatchNorm1d(input_dim,
                                                             affine=False))
-            encoder.add_module('enc_fc1', nn.Linear(idim, hidden_dim))
+            encoder.add_module('enc_fc1', nn.Linear(input_dim, hidden_dim))
             encoder.add_module('enc_nl', nn.LeakyReLU())
             self.critic_encoders.append(encoder)
+
             critic = nn.Sequential()
             critic.add_module('critic_fc1', nn.Linear(2 * hidden_dim,
                                                       hidden_dim))
             critic.add_module('critic_nl', nn.LeakyReLU())
-            critic.add_module('critic_fc2', nn.Linear(hidden_dim, odim))
+            critic.add_module('critic_fc2', nn.Linear(hidden_dim, output_dim))
             self.critics.append(critic)
 
             state_encoder = nn.Sequential()
             if norm_in:
                 state_encoder.add_module('s_enc_bn', nn.BatchNorm1d(
-                    sdim, affine=False))
-            state_encoder.add_module('s_enc_fc1', nn.Linear(sdim,
+                    state_dim, affine=False))
+            state_encoder.add_module('s_enc_fc1', nn.Linear(state_dim,
                                                             hidden_dim))
             state_encoder.add_module('s_enc_nl', nn.LeakyReLU())
             self.state_encoders.append(state_encoder)
 
         attend_dim = hidden_dim // attend_heads
+
         self.key_extractors = nn.ModuleList()
         self.selector_extractors = nn.ModuleList()
         self.value_extractors = nn.ModuleList()
-        for i in range(attend_heads):
+
+        for _ in range(attend_heads):
             self.key_extractors.append(
                 nn.Linear(hidden_dim, attend_dim, bias=False))
             self.selector_extractors.append(
                 nn.Linear(hidden_dim, attend_dim, bias=False))
-            self.value_extractors.append(nn.Sequential(nn.Linear(hidden_dim,
-                                                                 attend_dim),
-                                                       nn.LeakyReLU()))
+            self.value_extractors.append(
+                nn.Sequential(
+                    nn.Linear(hidden_dim, attend_dim), nn.LeakyReLU()
+                )
+            )
 
         self.shared_modules = [self.key_extractors, self.selector_extractors,
                                self.value_extractors, self.critic_encoders]
@@ -106,9 +111,9 @@ class AttentionCritic(nn.Module):
         """
         if agents is None:
             agents = range(len(self.critic_encoders))
-        states = [s for s, a in inps]
-        actions = [a for s, a in inps]
-        inps = [torch.cat((s, a), dim=1) for s, a in inps]
+        states = [state for state, _ in inps]
+        actions = [action for _, action in inps]
+        inps = [torch.cat((state, action), dim=1) for state, action in inps]
         # extract state-action encoding for each agent
         sa_encodings = [encoder(inp)
                         for encoder, inp in zip(self.critic_encoders, inps)]

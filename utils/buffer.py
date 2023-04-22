@@ -77,8 +77,7 @@ class ReplayBuffer(object):
             self.curr_i = 0
 
     def sample(self, N, norm_rews=True):
-        inds = np.random.choice(np.arange(self.filled_i), size=N,
-                                replace=True)
+        inds = np.random.choice(np.arange(self.filled_i), size=N, replace=True)
 
         def cast(x): return Variable(Tensor(x), requires_grad=False)
         if norm_rews:
